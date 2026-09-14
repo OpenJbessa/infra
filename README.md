@@ -135,7 +135,7 @@ tofu output vps_ssh_command
 | [dns.tf](dns.tf) | Enregistrements DNS Cloudflare |
 | [outputs.tf](outputs.tf) | IP, statut, commande SSH, catalogue |
 | [imports.tf](imports.tf) | Reprise du VPS existant |
-| [scripts/post-install.sh](scripts/post-install.sh) | Durcissement de base (pare-feu, fail2ban, SSH) |
+| [scripts/post-install.sh](scripts/post-install.sh) | Bootstrap du nœud : utilisateur, nftables, K3s |
 | [bootstrap/](bootstrap/) | Création du bucket R2 hébergeant l'état distant |
 
 ### Clés SSH
@@ -182,9 +182,25 @@ Cloudflare n'est nécessaire.
 ### Script de post-installation
 
 `post_install_script_path = "scripts/post-install.sh"` enregistre le script chez
-Hostinger et le rattache au VPS. Il ne s'exécute qu'à la **création ou la
-réinstallation** du serveur : modifier le fichier ensuite ne reconfigure pas un
-VPS déjà en place.
+Hostinger et le rattache au VPS. Il amorce le nœud : utilisateur non privilégié,
+nftables en refus par défaut, mises à jour de sécurité, et K3s avec Traefik
+désactivé, chiffrement des Secrets et réservations kubelet.
+
+> ⚠️ **Aucun secret ne doit y figurer.** Le script est stocké chez l'hébergeur
+> et consultable depuis son interface : ni clé age, ni jeton Teleport, ni
+> identifiants R2. Tout le reste entre par ArgoCD.
+
+Il ne s'exécute qu'à la **création ou la réinstallation** du serveur. Modifier le
+fichier ne reconfigure pas un VPS déjà en place : l'attacher est un
+`update in-place`, mais Hostinger ne le rejoue qu'à l'installation de l'OS.
+
+**Pour le rejouer, changez `vps_template_id`** — c'est aussi un `update in-place`
+et non une destruction, donc l'abonnement n'est pas résilié. C'est le mécanisme
+de reconstruction du projet. Il efface le disque.
+
+Le pare-feu n'ouvre 80 et 443 qu'aux plages Cloudflare, rafraîchies chaque jour
+par un timer systemd plutôt que figées à l'installation. Le port 22 reste ouvert
+jusqu'à la bascule sur Teleport.
 
 ## Points d'attention
 
