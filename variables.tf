@@ -1,0 +1,111 @@
+variable "hostinger_api_token" {
+  description = "Token API Hostinger. À fournir via la variable d'environnement TF_VAR_hostinger_api_token, jamais en dur dans un fichier versionné."
+  type        = string
+  sensitive   = true
+}
+
+# --- Catalogue ---------------------------------------------------------------
+
+variable "enable_catalog" {
+  description = "Interroge l'API pour lister plans, datacenters et templates disponibles (outputs `catalog_*`). À activer le temps de trouver les identifiants, puis à laisser désactivé : cela évite que ces appels fassent échouer les apply courants."
+  type        = bool
+  default     = false
+}
+
+# --- VPS ---------------------------------------------------------------------
+# Tant que vps_plan / vps_data_center_id / vps_template_id valent null, aucune
+# ressource VPS n'est gérée : on peut lancer `tofu plan` pour lire le catalogue
+# (voir outputs.tf) sans risquer de commander un serveur.
+
+variable "vps_plan" {
+  description = "Identifiant du plan VPS (ex. hostingercom-vps-kvm2-usd-1m). Voir l'output `catalog_plans`. null = pas de VPS géré."
+  type        = string
+  default     = null
+}
+
+variable "vps_data_center_id" {
+  description = "ID du datacenter. Voir l'output `catalog_data_centers`."
+  type        = number
+  default     = null
+}
+
+variable "vps_template_id" {
+  description = "ID du template OS à installer (ex. 1002 pour Debian 11). Voir l'output `catalog_templates`."
+  type        = number
+  default     = null
+}
+
+variable "existing_vps_id" {
+  description = "ID d'un VPS déjà commandé à reprendre sous gestion Terraform. Renseigné, il déclenche un import (aucune création, aucune facturation) au prochain apply. Exige que vps_plan / vps_data_center_id / vps_template_id soient également renseignés."
+  type        = number
+  default     = null
+}
+
+variable "vps_hostname" {
+  description = "FQDN à assigner au VPS. null = Hostinger en génère un."
+  type        = string
+  default     = null
+}
+
+variable "vps_root_password" {
+  description = "Mot de passe root initial. null = généré par Hostinger. Préférer l'accès par clé SSH."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "vps_payment_method_id" {
+  description = "ID du moyen de paiement à utiliser pour la commande. null = moyen par défaut du compte."
+  type        = number
+  default     = null
+}
+
+# --- Clés SSH ----------------------------------------------------------------
+
+variable "ssh_keys" {
+  description = "Clés SSH publiques à enregistrer chez Hostinger et à attacher au VPS. Clé de la map = nom affiché, valeur = contenu de la clé publique."
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition     = alltrue([for k in values(var.ssh_keys) : can(regex("^(ssh-(rsa|ed25519|dss)|ecdsa-sha2-) ", k))])
+    error_message = "Chaque valeur doit être une clé publique OpenSSH (ssh-ed25519 AAAA..., ssh-rsa AAAA..., ecdsa-sha2-...)."
+  }
+}
+
+# --- Script de post-installation ---------------------------------------------
+
+variable "post_install_script_path" {
+  description = "Chemin d'un script shell exécuté après l'installation de l'OS (voir scripts/post-install.sh). null = aucun script. Ne s'exécute qu'à la création/réinstallation du VPS, pas à chaque apply."
+  type        = string
+  default     = null
+}
+
+variable "post_install_script_name" {
+  description = "Nom affiché du script de post-installation dans le panel Hostinger."
+  type        = string
+  default     = "terraform-post-install"
+}
+
+# --- DNS ---------------------------------------------------------------------
+
+variable "dns_records" {
+  description = "Enregistrements DNS à gérer dans une zone Hostinger. Laisser `value` à null pour pointer automatiquement sur l'IPv4 du VPS (type A) ou son IPv6 (type AAAA)."
+  type = map(object({
+    zone      = string
+    name      = string
+    type      = string
+    value     = optional(string)
+    ttl       = optional(number, 14400)
+    overwrite = optional(bool, true)
+  }))
+  default = {}
+
+  validation {
+    condition = alltrue([
+      for r in values(var.dns_records) :
+      r.value != null || contains(["A", "AAAA"], r.type)
+    ])
+    error_message = "`value` ne peut être omis que pour les enregistrements de type A ou AAAA (il est alors déduit de l'IP du VPS)."
+  }
+}
