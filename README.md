@@ -9,6 +9,9 @@ Provider : [`hostinger/hostinger`](https://registry.terraform.io/providers/hosti
 
 - OpenTofu ≥ 1.6 (ou Terraform ≥ 1.6)
 - Un token API Hostinger : *hPanel → Compte → API → Générer un token*
+- `curl` et `jq` dans le `PATH` — utilisés par
+  [scripts/discover-vps-id.sh](scripts/discover-vps-id.sh) pour la découverte
+  automatique de l'ID du VPS
 
 `.terraform.lock.hcl` a été généré par OpenTofu et référence `registry.opentofu.org`.
 Si vous basculez sur Terraform, supprimez-le et relancez `terraform init`.
@@ -29,7 +32,7 @@ gestionnaire de secrets.
 
 | Fichier | Versionné | Contenu |
 |---|---|---|
-| `vps.auto.tfvars` | ✅ oui | Identifiants du VPS : `existing_vps_id`, plan, datacenter, template. Ce ne sont pas des secrets — ils sont inexploitables sans le token. |
+| `vps.auto.tfvars` | ✅ oui | Plan, datacenter et template du VPS. Ce ne sont pas des secrets — ils sont inexploitables sans le token. L'ID du VPS n'y figure pas : il est découvert automatiquement. |
 | `cloudflare.auto.tfvars` | ✅ oui | La zone DNS gérée. |
 | `terraform.tfvars` | ❌ non | Tout ce qui est sensible, `vps_root_password` en tête. |
 | variables d'environnement | ❌ non | `TF_VAR_hostinger_api_token`, `CLOUDFLARE_API_TOKEN`, et les identifiants R2 du backend (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`). |
@@ -68,26 +71,28 @@ Reportez les valeurs dans `terraform.tfvars`, puis laissez `enable_catalog` à
 `false` pour la suite (ces appels ne servent plus, et les garder actifs ajoute un
 point de panne à chaque `apply`).
 
-### 2a. Reprendre un VPS existant (import)
+### 2a. Reprendre un VPS existant (import automatique)
 
 C'est le chemin à suivre si le VPS est déjà commandé : l'import le place sous
 gestion Terraform **sans rien recréer ni facturer**.
 
-Relevez d'abord son ID et ses caractéristiques — cette requête renvoie tout ce
-qu'il faut d'un coup, et vaut test du token :
+**L'ID du VPS est découvert automatiquement** ([discovery.tf](discovery.tf)) :
+à chaque `plan`, [scripts/discover-vps-id.sh](scripts/discover-vps-id.sh)
+interroge l'API Hostinger, et s'il n'existe qu'un seul VPS sur le compte, son ID
+alimente directement le bloc `import` de [imports.tf](imports.tf). Rien à copier
+à la main.
+
+Il reste à renseigner `vps_plan`, `vps_data_center_id` et `vps_template_id` dans
+`vps.auto.tfvars` — ces trois-là ne sont pas devinés, volontairement (voir
+« Pourquoi seul l'ID est deviné » ci-dessous) :
 
 ```bash
 curl -s -H "Authorization: Bearer $TF_VAR_hostinger_api_token" \
   https://developers.hostinger.com/api/vps/v1/virtual-machines | jq
 ```
 
-Renseignez les quatre valeurs dans `vps.auto.tfvars` — les trois dernières sont
-obligatoires même pour un import, sans elles la ressource n'existe pas dans la
-configuration et il n'y a rien à importer :
-
 ```hcl
-existing_vps_id    = 123456
-vps_plan           = "hostingercom-vps-kvm2-usd-1m"
+vps_plan           = "KVM 2"
 vps_data_center_id = 13
 vps_template_id    = 1002
 ```
@@ -97,6 +102,41 @@ tofu plan    # doit annoncer "1 to import" — jamais "1 to add"
 tofu apply
 tofu plan    # doit annoncer "No changes"
 ```
+
+#### Garde-fou financier
+
+Si `vps_plan`/`vps_data_center_id`/`vps_template_id` sont renseignés mais
+qu'**aucun VPS n'est trouvé** (compte vide, jeton invalide, panne réseau vers
+l'API Hostinger), le `plan` **échoue au lieu de commander un nouveau VPS** :
+
+```
+Error: Resource precondition failed
+Aucun VPS existant détecté (ni découverte automatique, ni existing_vps_id) : appliquer
+commanderait un NOUVEAU VPS facturé chez Hostinger. [...] Pour confirmer une commande
+volontaire, positionnez confirm_new_vps_order = true.
+```
+
+Face à cette erreur, **cherchez d'abord pourquoi** (token, réseau) avant de
+songer à passer outre. `confirm_new_vps_order = true` n'a de sens que pour
+commander un second VPS *en toute connaissance de cause* (voir 2b).
+
+Si le compte a **plusieurs VPS**, la découverte automatique refuse de choisir et
+le `plan` échoue avec la liste de leurs ID — renseignez alors `existing_vps_id`
+à la main pour désigner celui à gérer ici ; cela court-circuite aussi la
+découverte (aucun appel réseau), utile en CI sans accès à l'API Hostinger.
+
+```hcl
+existing_vps_id = 123456
+```
+
+#### Pourquoi seul l'ID est deviné
+
+L'API renvoie le plan sous son nom lisible (`"KVM 2"`, pas le SKU de commande),
+et rien ne garantit que sa forme soit identique entre l'endpoint de liste et
+celui consulté par le `refresh` du provider pour un VPS donné. Reconstituer
+`vps_plan`/`vps_data_center_id`/`vps_template_id` par API interposée risquerait
+un faux « to change » à chaque `plan`. L'ID, lui, est un entier sans ambiguïté :
+c'est la seule valeur que la découverte automatique se permet de déduire.
 
 > ⚠️ Si le plan annonce `will be created` au lieu de `will be imported`, c'est
 > qu'`existing_vps_id` n'est pas pris en compte. **N'appliquez pas** : vous
@@ -134,6 +174,7 @@ tofu output vps_ssh_command
 | [data.tf](data.tf) | Catalogue plans / datacenters / templates (optionnel) |
 | [dns.tf](dns.tf) | Enregistrements DNS Cloudflare |
 | [outputs.tf](outputs.tf) | IP, statut, commande SSH, catalogue |
+| [discovery.tf](discovery.tf) | Découverte automatique de l'ID du VPS existant |
 | [imports.tf](imports.tf) | Reprise du VPS existant |
 | [scripts/post-install.sh](scripts/post-install.sh) | Bootstrap du nœud : utilisateur, nftables, K3s |
 | [bootstrap/](bootstrap/) | Création du bucket R2 hébergeant l'état distant |
@@ -213,4 +254,12 @@ jusqu'à la bascule sur Teleport.
 - **Portée du provider** : il ne couvre que le VPS, les clés SSH, les scripts de
   post-installation et le DNS. Pas de pare-feu, de snapshots ni de sauvegardes —
   cela reste à faire dans le hPanel ou sur le serveur.
-- **`tofu destroy` résilie l'abonnement** du VPS.
+- **`tofu destroy` résilie l'abonnement** du VPS. L'abonnement Hostinger actuel
+  est **mensuel** (KVM 2) : contrairement à un prépayé annuel, résilier n'efface
+  pas un crédit déjà versé, mais arrête la reconduction — vérifiez la date de
+  fin de période en cours avant de détruire, pour ne pas payer un mois entamé
+  pour rien.
+- **La découverte automatique de l'ID VPS** ([discovery.tf](discovery.tf))
+  interroge l'API Hostinger à chaque `plan`. Un garde-fou
+  (`confirm_new_vps_order`) empêche qu'un échec silencieux de cette découverte
+  ne commande un second VPS facturé — détails dans la section 2a.
