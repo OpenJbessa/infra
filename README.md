@@ -30,14 +30,19 @@ gestionnaire de secrets.
 | Fichier | Versionné | Contenu |
 |---|---|---|
 | `vps.auto.tfvars` | ✅ oui | Identifiants du VPS : `existing_vps_id`, plan, datacenter, template. Ce ne sont pas des secrets — ils sont inexploitables sans le token. |
+| `cloudflare.auto.tfvars` | ✅ oui | La zone DNS gérée. |
 | `terraform.tfvars` | ❌ non | Tout ce qui est sensible, `vps_root_password` en tête. |
-| variable d'environnement | ❌ non | Le token API. |
+| variables d'environnement | ❌ non | `TF_VAR_hostinger_api_token`, `CLOUDFLARE_API_TOKEN`, et les identifiants R2 du backend (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`). |
 
 Les deux fichiers sont chargés automatiquement. En cas de doublon,
 `*.auto.tfvars` l'emporte sur `terraform.tfvars` — ne déclarez donc pas la même
 variable dans les deux.
 
 ## Démarrage
+
+L'état vit sur Cloudflare R2. Créez d'abord le bucket qui l'héberge — une seule
+fois, voir [bootstrap/README.md](bootstrap/README.md) — puis activez le bloc
+`backend` de [versions.tf](versions.tf).
 
 ```bash
 tofu init
@@ -121,15 +126,17 @@ tofu output vps_ssh_command
 
 | Fichier | Contenu |
 |---|---|
-| [versions.tf](versions.tf) | Versions requises, backend (state local par défaut) |
-| [providers.tf](providers.tf) | Configuration du provider Hostinger |
+| [versions.tf](versions.tf) | Versions requises, backend R2 |
+| [providers.tf](providers.tf) | Providers Hostinger et Cloudflare |
 | [variables.tf](variables.tf) | Toutes les entrées |
 | [locals.tf](locals.tf) | Valeurs dérivées |
 | [main.tf](main.tf) | VPS, clés SSH, script de post-installation |
 | [data.tf](data.tf) | Catalogue plans / datacenters / templates (optionnel) |
-| [dns.tf](dns.tf) | Enregistrements DNS |
+| [dns.tf](dns.tf) | Enregistrements DNS Cloudflare |
 | [outputs.tf](outputs.tf) | IP, statut, commande SSH, catalogue |
+| [imports.tf](imports.tf) | Reprise du VPS existant |
 | [scripts/post-install.sh](scripts/post-install.sh) | Durcissement de base (pare-feu, fail2ban, SSH) |
+| [bootstrap/](bootstrap/) | Création du bucket R2 hébergeant l'état distant |
 
 ### Clés SSH
 
@@ -143,19 +150,34 @@ Elles sont enregistrées chez Hostinger et attachées au VPS.
 
 ### DNS
 
-Un enregistrement sans `value` pointe automatiquement sur l'IP du VPS géré ici
-(IPv4 pour un `A`, IPv6 pour un `AAAA`) :
+Le DNS est géré **chez Cloudflare**, qui sert aussi de proxy devant Traefik. Le
+DNS Hostinger n'est pas utilisé.
+
+Un enregistrement sans `content` pointe automatiquement sur l'IP du VPS géré ici
+(IPv4 pour un `A`, IPv6 pour un `AAAA`). `name` est relatif à la zone :
 
 ```hcl
 dns_records = {
-  apex = { zone = "mondomaine.fr", name = "@", type = "A" }
-  www  = { zone = "mondomaine.fr", name = "www", type = "CNAME", value = "mondomaine.fr" }
+  apex    = { name = "@", type = "A" }
+  grafana = { name = "grafana", type = "A" }
+  teleport = { name = "teleport", type = "A", proxied = false }
 }
 ```
 
-`overwrite` vaut `true` par défaut : l'enregistrement remplace ceux qui existent
-déjà pour le même couple `name`/`type`. Le provider recrée tout enregistrement
-modifié (`ForceNew`).
+`proxied` vaut `true` par défaut : le trafic passe par Cloudflare, qui masque
+l'adresse d'origine. Le `ttl` est alors forcé à « automatique », seule valeur
+acceptée derrière le proxy.
+
+Mettez `proxied = false` pour tout ce qui n'est pas du HTTP(S) classique —
+Teleport notamment. Le token Cloudflare doit porter les permissions *Zone — DNS
+Write* et *Zone — Zone Read* :
+
+```bash
+export CLOUDFLARE_API_TOKEN="..."
+```
+
+Tant que `dns_records` est vide, la zone n'est pas interrogée et aucun token
+Cloudflare n'est nécessaire.
 
 ### Script de post-installation
 
