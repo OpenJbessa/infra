@@ -1,0 +1,25 @@
+# State : contient le token API et le mot de passe root EN CLAIR.
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+
+# Répertoire de travail du provider
+.terraform/
+
+# Valeurs locales et secrets.
+# Exception : *.auto.tfvars porte les identifiants non sensibles (ID du VPS,
+# plan, datacenter, template) et reste versionné.
+*.tfvars
+*.tfvars.json
+!*.auto.tfvars
+!*.tfvars.example
+
+# Divers
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.envrc
+*.tfplan
