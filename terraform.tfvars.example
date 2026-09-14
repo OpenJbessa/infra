@@ -1,0 +1,56 @@
+# Copier en terraform.tfvars puis compléter. terraform.tfvars est gitignoré et
+# accueille les VALEURS SENSIBLES (vps_root_password).
+#
+# Les identifiants non sensibles (ID du VPS, plan, datacenter, template) vivent
+# dans vps.auto.tfvars, qui est versionné.
+#
+# NE PAS mettre le token API ici : l'exporter en variable d'environnement
+#   export TF_VAR_hostinger_api_token="..."
+
+# --- Reprendre un VPS existant ---
+# ID d'un VPS déjà commandé : déclenche un import, pas une création.
+# Les trois valeurs vps_* ci-dessous restent obligatoires.
+#   curl -s -H "Authorization: Bearer $TF_VAR_hostinger_api_token" \
+#     https://developers.hostinger.com/api/vps/v1/virtual-machines | jq
+# existing_vps_id = 123456
+
+# --- VPS ---
+# Récupérer les identifiants avec :
+#   tofu apply           # ne crée rien tant que ces trois valeurs sont absentes
+#   tofu output catalog_plans
+#   tofu output catalog_data_centers
+#   tofu output catalog_templates
+
+# vps_plan           = "hostingercom-vps-kvm2-usd-1m"
+# vps_data_center_id = 13
+# vps_template_id    = 1002 # Debian 11
+# vps_hostname       = "vps-01.mondomaine.fr"
+
+# Mot de passe root initial (12 caractères minimum).
+# Facultatif : sans valeur, Hostinger en génère un. Préférer la connexion par clé SSH.
+# vps_root_password = "..."
+
+# --- Clés SSH ---
+# ssh_keys = {
+#   "laptop" = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... jonathan@laptop"
+# }
+
+# --- Script de post-installation ---
+# Exécuté une seule fois, à la création (ou réinstallation) du VPS.
+# post_install_script_path = "scripts/post-install.sh"
+
+# --- DNS ---
+# `value` omis => pointe automatiquement sur l'IP du VPS géré ici.
+# dns_records = {
+#   apex = {
+#     zone = "mondomaine.fr"
+#     name = "@"
+#     type = "A"
+#   }
+#   www = {
+#     zone  = "mondomaine.fr"
+#     name  = "www"
+#     type  = "CNAME"
+#     value = "mondomaine.fr"
+#   }
+# }
