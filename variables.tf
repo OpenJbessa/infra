@@ -89,23 +89,35 @@ variable "post_install_script_name" {
 
 # --- DNS ---------------------------------------------------------------------
 
+variable "cloudflare_zone_name" {
+  description = "Domaine géré chez Cloudflare (ex. jbessa.tech). La zone y est déléguée ; le DNS Hostinger n'est pas utilisé."
+  type        = string
+}
+
 variable "dns_records" {
-  description = "Enregistrements DNS à gérer dans une zone Hostinger. Laisser `value` à null pour pointer automatiquement sur l'IPv4 du VPS (type A) ou son IPv6 (type AAAA)."
+  description = "Enregistrements DNS à gérer dans la zone Cloudflare. `name` est relatif à la zone (`@` pour l'apex). Laisser `content` à null pour pointer automatiquement sur l'IPv4 du VPS (type A) ou son IPv6 (type AAAA)."
   type = map(object({
-    zone      = string
-    name      = string
-    type      = string
-    value     = optional(string)
-    ttl       = optional(number, 14400)
-    overwrite = optional(bool, true)
+    name    = string
+    type    = string
+    content = optional(string)
+    proxied = optional(bool, true)
+    ttl     = optional(number, 1)
   }))
   default = {}
 
   validation {
     condition = alltrue([
       for r in values(var.dns_records) :
-      r.value != null || contains(["A", "AAAA"], r.type)
+      r.content != null || contains(["A", "AAAA"], r.type)
     ])
-    error_message = "`value` ne peut être omis que pour les enregistrements de type A ou AAAA (il est alors déduit de l'IP du VPS)."
+    error_message = "`content` ne peut être omis que pour les enregistrements de type A ou AAAA (il est alors déduit de l'IP du VPS)."
+  }
+
+  validation {
+    condition = alltrue([
+      for r in values(var.dns_records) :
+      !r.proxied || contains(["A", "AAAA", "CNAME"], r.type)
+    ])
+    error_message = "Seuls les enregistrements A, AAAA et CNAME peuvent être proxifiés par Cloudflare."
   }
 }
