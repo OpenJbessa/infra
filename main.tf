@@ -35,5 +35,13 @@ resource "hostinger_vps" "this" {
       condition     = var.vps_root_password == null || length(var.vps_root_password) >= 12
       error_message = "vps_root_password doit faire au moins 12 caractères."
     }
+
+    # Garde-fou financier : si la découverte automatique de l'ID (discovery.tf)
+    # échoue silencieusement ou renvoie « aucun VPS trouvé » alors qu'un abonnement
+    # existe déjà, ce précondition bloque l'apply au lieu d'en commander un second.
+    precondition {
+      condition     = local.resolved_vps_id != null || var.confirm_new_vps_order
+      error_message = "Aucun VPS existant détecté (ni découverte automatique, ni existing_vps_id) : appliquer commanderait un NOUVEAU VPS facturé chez Hostinger. Si un VPS existe déjà, vérifiez TF_VAR_hostinger_api_token et la sortie de `tofu plan` avant de continuer. Pour confirmer une commande volontaire, positionnez confirm_new_vps_order = true."
+    }
   }
 }

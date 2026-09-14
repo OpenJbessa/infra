@@ -36,9 +36,15 @@ variable "vps_template_id" {
 }
 
 variable "existing_vps_id" {
-  description = "ID d'un VPS déjà commandé à reprendre sous gestion Terraform. Renseigné, il déclenche un import (aucune création, aucune facturation) au prochain apply. Exige que vps_plan / vps_data_center_id / vps_template_id soient également renseignés."
+  description = "ID d'un VPS déjà commandé à reprendre sous gestion Terraform. Laissé à null (recommandé), l'ID est découvert automatiquement via l'API Hostinger (scripts/discover-vps-id.sh). Ne le renseigner à la main que pour désambiguïser un compte à plusieurs VPS, ou dans un environnement sans accès réseau à l'API. Dans tous les cas, exige que vps_plan / vps_data_center_id / vps_template_id soient également renseignés."
   type        = number
   default     = null
+}
+
+variable "confirm_new_vps_order" {
+  description = "Garde-fou financier. Doit être positionné à true explicitement pour commander un NOUVEAU VPS facturé, lorsque ni la découverte automatique ni existing_vps_id ne trouvent de VPS existant alors que vps_plan/vps_data_center_id/vps_template_id sont renseignés. Empêche une commande accidentelle si la découverte échoue silencieusement (jeton invalide, panne réseau, etc.)."
+  type        = bool
+  default     = false
 }
 
 variable "vps_hostname" {
