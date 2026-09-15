@@ -35,7 +35,7 @@ gestionnaire de secrets.
 | `vps.auto.tfvars` | ✅ oui | Plan, datacenter et template du VPS. Ce ne sont pas des secrets — ils sont inexploitables sans le token. L'ID du VPS n'y figure pas : il est découvert automatiquement. |
 | `cloudflare.auto.tfvars` | ✅ oui | La zone DNS gérée. |
 | `terraform.tfvars` | ❌ non | Tout ce qui est sensible, `vps_root_password` en tête. |
-| variables d'environnement | ❌ non | `TF_VAR_hostinger_api_token`, `CLOUDFLARE_API_TOKEN`, et les identifiants R2 du backend (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`). |
+| variables d'environnement | ❌ non | `TF_VAR_hostinger_api_token`, `CLOUDFLARE_API_TOKEN`. Les identifiants R2 (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) ne servent que le jour où l'état distant est activé — voir plus bas. |
 
 Les deux fichiers sont chargés automatiquement. En cas de doublon,
 `*.auto.tfvars` l'emporte sur `terraform.tfvars` — ne déclarez donc pas la même
@@ -43,9 +43,10 @@ variable dans les deux.
 
 ## Démarrage
 
-L'état vit sur Cloudflare R2. Créez d'abord le bucket qui l'héberge — une seule
-fois, voir [bootstrap/README.md](bootstrap/README.md) — puis activez le bloc
-`backend` de [versions.tf](versions.tf).
+L'état est **local pour le moment** (`terraform.tfstate`, gitignoré) : c'est un
+choix délibéré, pas une étape à finir. Un backend distant sur Cloudflare R2 est
+prêt dans [bootstrap/](bootstrap/) pour le jour où c'est utile — voir
+« État distant » plus bas — mais rien ne l'exige pour travailler.
 
 ```bash
 tofu init
@@ -162,11 +163,28 @@ tofu apply tf.plan
 tofu output vps_ssh_command
 ```
 
+## État distant (plus tard)
+
+Pour l'instant, l'état reste **local**, par choix : activer R2 suppose de mettre
+un moyen de paiement sur le compte Cloudflare, même pour rester dans le palier
+gratuit, et ce n'est pas le moment.
+
+Rien à faire aujourd'hui. Le jour où c'est utile — travailler depuis une autre
+machine, une CI, ou simplement sécuriser l'état — [bootstrap/](bootstrap/)
+crée le bucket R2 et [versions.tf](versions.tf) contient le bloc `backend`
+prêt à décommenter. La marche à suivre est dans
+[bootstrap/README.md](bootstrap/README.md).
+
+En attendant, seul filet de sécurité : **`terraform.tfstate` ne vit que sur
+cette machine**, sans copie ailleurs. Il n'est pas nécessaire de le sauvegarder
+activement — si la machine est perdue, le VPS continue de tourner chez
+Hostinger, il suffit de le réimporter (section 2a) pour reprendre la main.
+
 ## Ce qui est géré
 
 | Fichier | Contenu |
 |---|---|
-| [versions.tf](versions.tf) | Versions requises, backend R2 |
+| [versions.tf](versions.tf) | Versions requises, backend R2 (différé, voir plus haut) |
 | [providers.tf](providers.tf) | Providers Hostinger et Cloudflare |
 | [variables.tf](variables.tf) | Toutes les entrées |
 | [locals.tf](locals.tf) | Valeurs dérivées |
@@ -246,8 +264,8 @@ jusqu'à la bascule sur Teleport.
 ## Points d'attention
 
 - **Le state contient des secrets en clair** (token API, mot de passe root).
-  `.gitignore` l'exclut ; pour un usage à plusieurs, passez sur un backend
-  distant chiffré (voir [versions.tf](versions.tf)).
+  `.gitignore` l'exclut. Il est local pour l'instant — voir « État distant »
+  plus haut.
 - **`prevent_destroy = true`** protège le VPS dans [main.tf](main.tf). Pour le
   détruire ou le réinstaller volontairement, commentez cette ligne le temps d'un
   `apply`. Changer `vps_template_id` réinstalle l'OS et **efface les données**.

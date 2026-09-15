@@ -16,11 +16,14 @@ terraform {
     }
   }
 
-  # État distant sur Cloudflare R2, verrouillé par use_lockfile (écriture
-  # conditionnelle If-None-Match, sans table DynamoDB).
+  # État LOCAL pour le moment (choix délibéré, pas une étape en attente :
+  # activer R2 suppose un moyen de paiement sur le compte Cloudflare, même
+  # pour le palier gratuit). Rien ci-dessous n'est requis pour travailler.
   #
-  # Créer d'abord le bucket : voir bootstrap/README.md. Remplacer <account_id>
-  # ci-dessous, décommenter, puis migrer l'état local existant :
+  # Le jour où c'est utile : bootstrap/ crée le bucket (voir
+  # bootstrap/README.md), verrouillé par use_lockfile (écriture conditionnelle
+  # If-None-Match, sans table DynamoDB). Remplacer <account_id> ci-dessous,
+  # décommenter, puis migrer l'état local existant :
   #
   #   export AWS_ACCESS_KEY_ID=...        # jeton R2, pas le token Cloudflare
   #   export AWS_SECRET_ACCESS_KEY=...

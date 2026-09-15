@@ -1,5 +1,10 @@
 # Amorçage — bucket R2 pour l'état distant
 
+> **Différé pour l'instant.** Ce module est prêt mais pas utilisé : activer R2
+> suppose un moyen de paiement sur le compte Cloudflare, même pour rester dans
+> le palier gratuit. Rien ici ne bloque le reste du projet — l'état de la
+> configuration racine reste local jusqu'à nouvel ordre.
+
 Ce module crée le bucket Cloudflare R2 qui héberge l'état OpenTofu de la
 configuration racine.
 
