@@ -205,7 +205,18 @@ ssh_keys = {
 }
 ```
 
-Elles sont enregistrées chez Hostinger et attachées au VPS.
+Chaque entrée est enregistrée chez Hostinger (`hostinger_vps_ssh_key`).
+
+> ⚠️ **L'attache automatique au VPS est cassée côté Hostinger** —
+> [issue #29](https://github.com/hostinger/terraform-provider-hostinger/issues/29),
+> ouverte, non résolue. La route API que le provider appelle pour vérifier les
+> clés déjà attachées avant d'en ajouter une renvoie 404. `ignore_changes` sur
+> `ssh_key_ids` ([main.tf](main.tf)) empêche que ça bloque les `plan` suivants,
+> mais en conséquence **une nouvelle clé ajoutée ici est enregistrée chez
+> Hostinger, jamais attachée automatiquement à ce VPS** : il faut le faire à la
+> main dans le hPanel (*VPS → srv1977709.hstgr.cloud → Clés SSH*) après chaque
+> `apply` qui en ajoute une. Retirer `ignore_changes` le jour où l'upstream
+> corrige la route.
 
 ### DNS
 

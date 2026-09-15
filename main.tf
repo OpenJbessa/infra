@@ -31,6 +31,19 @@ resource "hostinger_vps" "this" {
     # Retirer cette ligne (le temps d'un apply) pour réinstaller volontairement.
     prevent_destroy = true
 
+    # Bug connu et non résolu du provider (upstream, pas notre code) :
+    # https://github.com/hostinger/terraform-provider-hostinger/issues/29
+    # La route API que le provider appelle pour vérifier les clés déjà
+    # attachées avant d'en ajouter une nouvelle (GET .../public-keys) renvoie
+    # 404 côté Hostinger. Documenté comme cassé par d'autres utilisateurs.
+    #
+    # Conséquence : ajouter une entrée à `ssh_keys` continue d'enregistrer la
+    # clé chez Hostinger (hostinger_vps_ssh_key, non affecté), mais l'attacher
+    # à CE VPS doit se faire à la main dans le hPanel — Terraform n'essaiera
+    # plus de le faire tout seul. Retirer cette ligne le jour où l'upstream
+    # corrige la route.
+    ignore_changes = [ssh_key_ids]
+
     precondition {
       condition     = var.vps_root_password == null || length(var.vps_root_password) >= 12
       error_message = "vps_root_password doit faire au moins 12 caractères."
