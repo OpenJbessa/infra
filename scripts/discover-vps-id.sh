@@ -29,13 +29,26 @@ fail() {
 command -v curl >/dev/null || fail "curl est requis pour la découverte automatique du VPS."
 command -v jq >/dev/null || fail "jq est requis pour la découverte automatique du VPS."
 
-response=$(curl -sS --max-time 20 -w '\n%{http_code}' \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Accept: application/json" \
-  "$API_BASE/api/vps/v1/virtual-machines") || fail "Échec de connexion à l'API Hostinger."
+# L'API Hostinger a montré des lenteurs/coupures ponctuelles en usage réel :
+# quelques tentatives avec backoff avant d'abandonner. Uniquement pour les
+# pannes transitoires (timeout, 5xx) — jamais pour un 401/404, que réessayer
+# ne résoudra pas.
+max_attempts=3
+attempt=1
+while :; do
+  if response=$(curl -sS --max-time 20 -w '\n%{http_code}' \
+      -H "Authorization: Bearer $TOKEN" \
+      -H "Accept: application/json" \
+      "$API_BASE/api/vps/v1/virtual-machines" 2>&1); then
+    status="${response##*$'\n'}"
+    body="${response%$'\n'*}"
+    [ "$status" -lt 500 ] 2>/dev/null && break
+  fi
 
-status="${response##*$'\n'}"
-body="${response%$'\n'*}"
+  [ "$attempt" -ge "$max_attempts" ] && fail "Échec de connexion à l'API Hostinger après $max_attempts tentatives : ${response:-inconnu}"
+  sleep "$((attempt * 2))"
+  attempt=$((attempt + 1))
+done
 
 [ "$status" = "200" ] || fail "L'API Hostinger a répondu HTTP $status : $body"
 
