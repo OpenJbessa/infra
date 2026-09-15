@@ -68,7 +68,7 @@ tofu output catalog_data_centers
 tofu output catalog_templates
 ```
 
-Reportez les valeurs dans `terraform.tfvars`, puis laissez `enable_catalog` à
+Reportez les valeurs dans `vps.auto.tfvars`, puis laissez `enable_catalog` à
 `false` pour la suite (ces appels ne servent plus, et les garder actifs ajoute un
 point de panne à chaque `apply`).
 
@@ -141,9 +141,9 @@ c'est la seule valeur que la découverte automatique se permet de déduire.
 
 > ⚠️ Si le plan annonce `will be created` au lieu de `will be imported`, c'est
 > qu'`existing_vps_id` n'est pas pris en compte. **N'appliquez pas** : vous
-> commanderiez un second VPS. Vérifiez la valeur dans `terraform.tfvars`.
+> commanderiez un second VPS. Vérifiez la valeur dans `vps.auto.tfvars`.
 
-Si le second `tofu plan` n'est pas vide, alignez `terraform.tfvars` sur ce que
+Si le second `tofu plan` n'est pas vide, alignez `vps.auto.tfvars` sur ce que
 le plan affiche — c'est la réalité du serveur. Deux écarts fréquents :
 
 - **Clés SSH** : le VPS en a déjà, mais `ssh_keys` est vide → le plan propose de
@@ -217,8 +217,8 @@ Un enregistrement sans `content` pointe automatiquement sur l'IP du VPS géré i
 
 ```hcl
 dns_records = {
-  apex    = { name = "@", type = "A" }
-  grafana = { name = "grafana", type = "A" }
+  apex     = { name = "@", type = "A" }
+  grafana  = { name = "grafana", type = "A" }
   teleport = { name = "teleport", type = "A", proxied = false }
 }
 ```

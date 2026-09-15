@@ -17,7 +17,12 @@ locals {
 resource "cloudflare_dns_record" "this" {
   for_each = var.dns_records
 
-  zone_id = local.cloudflare_zone_id
+  # zone_id est requis par le schéma du provider : lui passer null ferait
+  # échouer le plan avec une erreur générique AVANT que la precondition
+  # ci-dessous n'ait la main. Le sentinel est rejeté par Cloudflare de toute
+  # façon si jamais il était utilisé pour de vrai, mais la precondition bloque
+  # toujours le plan avant cet appel.
+  zone_id = coalesce(local.cloudflare_zone_id, "zone-cloudflare-introuvable")
   name    = each.value.name == "@" ? var.cloudflare_zone_name : "${each.value.name}.${var.cloudflare_zone_name}"
   type    = each.value.type
 
