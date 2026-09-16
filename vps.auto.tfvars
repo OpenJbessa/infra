@@ -14,7 +14,11 @@
 
 vps_plan           = "KVM 2"
 vps_data_center_id = 19
-vps_template_id    = 1188 # Debian 13
+vps_template_id    = 1031 # Debian 12 — changé depuis 1188 (Debian 13) pour déclencher une
+# réinstallation réelle (Terraform n'agit que sur un changement de
+# valeur). Le cahier des charges demande "Debian minimal", sans
+# version précise : Debian 12 convient, on y reste pour ne pas
+# effacer une seconde fois le cluster fraîchement configuré.
 
 ssh_keys = {
   "laptop" = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBj14mrYL3sBYSJx1/4bEPBq+Y50UbC0J0ywdnX0WyBN"
@@ -26,4 +30,4 @@ post_install_script_path = "scripts/post-install.sh"
 # variables.tf). Le stub le remplace, épinglé au dernier commit ayant modifié
 # post-install.sh — à mettre à jour après toute modification de ce fichier :
 #   git log -1 --format=%H -- scripts/post-install.sh
-post_install_fetch_url = "https://raw.githubusercontent.com/OpenJbessa/infra/23a5abb2130bc47608bd138189b4c8f067c5400b/scripts/post-install.sh"
+post_install_fetch_url = "https://raw.githubusercontent.com/OpenJbessa/infra/ef42b88372c113d9ebea5f6fa2a2ffe596ff447d/scripts/post-install.sh"
