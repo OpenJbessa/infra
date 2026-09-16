@@ -85,8 +85,16 @@ chmod 440 /etc/sudoers.d/90-sudo-nopasswd
 # Le port 22 reste ouvert ici : Teleport n'est pas encore déployé. Il sera
 # fermé définitivement à l'étape suivante du plan de construction, une fois
 # l'accès administratif bascule sur Teleport.
+#
+# 00- et non 99- : sshd applique la PREMIÈRE occurrence de chaque directive
+# rencontrée dans l'ordre alphabétique des fichiers inclus (l'inverse de la
+# plupart des systèmes de config). L'image Hostinger dépose déjà
+# /etc/ssh/sshd_config.d/50-cloud-init.conf avec `PasswordAuthentication yes` :
+# un fichier 99- serait lu après et donc ignoré pour cette directive.
+# Constaté en usage réel — PermitRootLogin no fonctionnait (non touché par
+# 50-cloud-init.conf), PasswordAuthentication no était silencieusement perdu.
 if [ -s "/home/$ADMIN_USER/.ssh/authorized_keys" ]; then
-  cat >/etc/ssh/sshd_config.d/99-hardening.conf <<'EOF'
+  cat >/etc/ssh/sshd_config.d/00-hardening.conf <<'EOF'
 PermitRootLogin no
 PasswordAuthentication no
 KbdInteractiveAuthentication no
