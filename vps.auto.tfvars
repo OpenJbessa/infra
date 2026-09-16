@@ -21,3 +21,9 @@ ssh_keys = {
 }
 
 post_install_script_path = "scripts/post-install.sh"
+
+# Contenu envoyé tel quel à Hostinger : défi Cloudflare systématique (voir
+# variables.tf). Le stub le remplace, épinglé au dernier commit ayant modifié
+# post-install.sh — à mettre à jour après toute modification de ce fichier :
+#   git log -1 --format=%H -- scripts/post-install.sh
+post_install_fetch_url = "https://raw.githubusercontent.com/OpenJbessa/infra/23a5abb2130bc47608bd138189b4c8f067c5400b/scripts/post-install.sh"

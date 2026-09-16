@@ -8,8 +8,19 @@ resource "hostinger_vps_ssh_key" "this" {
 resource "hostinger_vps_post_install_script" "this" {
   count = var.post_install_script_path != null ? 1 : 0
 
-  name    = var.post_install_script_name
-  content = file(var.post_install_script_path)
+  name = var.post_install_script_name
+
+  # Un contenu envoyé directement au-delà d'une certaine taille/complexité
+  # fait échouer la création (défi Cloudflare côté API Hostinger — voir
+  # post_install_fetch_url dans variables.tf). Le stub qui télécharge et
+  # exécute le vrai script depuis GitHub est le chemin normal désormais.
+  content = (
+    var.post_install_fetch_url != null
+    ? templatefile("${path.module}/scripts/post-install-fetch-stub.sh.tftpl", {
+      fetch_url = var.post_install_fetch_url
+    })
+    : file(var.post_install_script_path)
+  )
 }
 
 resource "hostinger_vps" "this" {

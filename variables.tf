@@ -93,6 +93,12 @@ variable "post_install_script_name" {
   default     = "terraform-post-install"
 }
 
+variable "post_install_fetch_url" {
+  description = "URL brute (raw.githubusercontent.com, épinglée à un commit précis) du vrai contenu de post_install_script_path. Si renseigné, Hostinger reçoit un petit stub qui télécharge et exécute ce contenu, au lieu du script complet : au-delà d'une certaine taille/complexité, l'API refuse la création avec un défi Cloudflare, reproduit de façon fiable et indépendante du contenu exact (voir README). Laisser à null pour envoyer le fichier directement — viable seulement pour un script assez court. Mettre à jour après toute modification de post_install_script_path : `git log -1 --format=%H -- scripts/post-install.sh`."
+  type        = string
+  default     = null
+}
+
 # --- DNS ---------------------------------------------------------------------
 
 variable "cloudflare_zone_name" {

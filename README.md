@@ -251,14 +251,63 @@ Cloudflare n'est nécessaire.
 
 ### Script de post-installation
 
-`post_install_script_path = "scripts/post-install.sh"` enregistre le script chez
-Hostinger et le rattache au VPS. Il amorce le nœud : utilisateur non privilégié,
-nftables en refus par défaut, mises à jour de sécurité, et K3s avec Traefik
-désactivé, chiffrement des Secrets et réservations kubelet.
+`post_install_script_path = "scripts/post-install.sh"` pointe vers le script qui
+amorce le nœud : utilisateur non privilégié, nftables en refus par défaut, mises
+à jour de sécurité, et K3s avec Traefik désactivé, chiffrement des Secrets et
+réservations kubelet.
 
-> ⚠️ **Aucun secret ne doit y figurer.** Le script est stocké chez l'hébergeur
-> et consultable depuis son interface : ni clé age, ni jeton Teleport, ni
-> identifiants R2. Tout le reste entre par ArgoCD.
+> ⚠️ **Aucun secret ne doit y figurer.** Le script devient public (voir
+> ci-dessous) et est de toute façon consultable depuis l'interface Hostinger :
+> ni clé age, ni jeton Teleport, ni identifiants R2. Tout le reste entre par
+> ArgoCD.
+
+#### Pourquoi un stub plutôt que le fichier envoyé tel quel
+
+Le contenu n'est **plus envoyé directement** à l'API Hostinger. Soumis en une
+fois, ce script (250 lignes : sudoers, durcissement SSH, unités systemd,
+pare-feu, installation K3s) fait systématiquement échouer sa création avec un
+défi Cloudflare — `Error: failed to create post-install script: ... Just a
+moment...`, la page JS que l'API sert quand Cloudflare protège
+`developers.hostinger.com`.
+
+Isolé par dichotomie (script coupé en deux, quatre, seize, jusqu'à des
+fragments de quelques lignes, une quinzaine de tentatives) : **aucun motif
+textuel précis n'explique le blocage**. Un même bloc de durcissement SSH échoue
+qu'il soit en clair, en base64, ou remplacé par un contenu factice ; d'autres
+moitiés du script, tout aussi denses, passent sans problème. Le seul dénominateur
+commun : le script complet échoue systématiquement (y compris après plusieurs
+heures d'attente, ce qui exclut un simple throttling temporaire), alors que
+tout fragment assez court passe. Conclusion la plus probable : un score WAF
+cumulatif sur l'ensemble du contenu (plusieurs motifs modérément sensibles —
+sudoers, SSH, systemd, pare-feu — qui s'additionnent), pas un motif unique.
+
+`post_install_fetch_url` (dans [variables.tf](variables.tf)) est le contournement :
+un stub de quelques lignes, largement sous ce seuil, est ce qui est réellement
+envoyé à Hostinger. Il télécharge le vrai script depuis GitHub (dépôt public,
+sans secret — c'est pour ça qu'il doit rester sans secret) et l'exécute :
+
+```hcl
+post_install_fetch_url = "https://raw.githubusercontent.com/OpenJbessa/infra/<commit>/scripts/post-install.sh"
+```
+
+**À refaire après toute modification de `post-install.sh`** — le commit épinglé
+fige le contenu réellement exécuté au boot, y compris pour d'anciennes
+attaches déjà en state :
+
+```bash
+git push
+git log -1 --format=%H -- scripts/post-install.sh   # commit à coller dans l'URL ci-dessus
+```
+
+Si le commit ciblé n'est pas poussé, `tofu apply` réussit quand même (Hostinger
+stocke le stub sans jamais vérifier que l'URL répond) — l'échec n'apparaît qu'au
+boot du VPS, silencieusement (`curl -f` fait échouer le stub, le nœud reste nu).
+**Vérifier avant d'appliquer** :
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" "$(echo 'var.post_install_fetch_url' | tofu console | tr -d '\"')"
+# doit répondre 200
+```
 
 Il ne s'exécute qu'à la **création ou la réinstallation** du serveur. Modifier le
 fichier ne reconfigure pas un VPS déjà en place : l'attacher est un
