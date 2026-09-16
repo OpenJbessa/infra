@@ -14,11 +14,7 @@
 
 vps_plan           = "KVM 2"
 vps_data_center_id = 19
-vps_template_id    = 1031 # Debian 12 — changé depuis 1188 (Debian 13) pour déclencher une
-# réinstallation réelle (Terraform n'agit que sur un changement de
-# valeur). Le cahier des charges demande "Debian minimal", sans
-# version précise : Debian 12 convient, on y reste pour ne pas
-# effacer une seconde fois le cluster fraîchement configuré.
+vps_template_id    = 1188 # Debian 13 
 
 ssh_keys = {
   "laptop" = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBj14mrYL3sBYSJx1/4bEPBq+Y50UbC0J0ywdnX0WyBN"
