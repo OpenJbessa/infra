@@ -26,4 +26,4 @@ post_install_script_path = "scripts/post-install.sh"
 # variables.tf). Le stub le remplace, épinglé au dernier commit ayant modifié
 # post-install.sh — à mettre à jour après toute modification de ce fichier :
 #   git log -1 --format=%H -- scripts/post-install.sh
-post_install_fetch_url = "https://raw.githubusercontent.com/OpenJbessa/infra/5f724a0da418aafa0e855058fe37820fd12d7ef3/scripts/post-install.sh"
+post_install_fetch_url = "https://raw.githubusercontent.com/OpenJbessa/infra/1eddec77d9a72d129d8351d293d8606de76d97ed/scripts/post-install.sh"
