@@ -196,6 +196,42 @@ Hostinger, il suffit de le réimporter (section 2a) pour reprendre la main.
 | [imports.tf](imports.tf) | Reprise du VPS existant |
 | [scripts/post-install.sh](scripts/post-install.sh) | Bootstrap du nœud : utilisateur, nftables, K3s |
 | [bootstrap/](bootstrap/) | Création du bucket R2 hébergeant l'état distant |
+| [.github/workflows/opentofu.yml](.github/workflows/opentofu.yml) | CI : fmt, validate, scan, plan |
+
+## CI — GitHub Actions
+
+La pipeline ([.github/workflows/opentofu.yml](.github/workflows/opentofu.yml))
+valide et prévisualise à chaque pull request : `tofu fmt`, `tofu validate`, un
+scan de sécurité ([Trivy](https://github.com/aquasecurity/trivy)) et `tofu
+plan`, dont le résultat est posté en commentaire sur la PR. Un run
+hebdomadaire (planifié) rejoue le même plan pour détecter une dérive — un
+changement fait à la main dans le hPanel, par exemple.
+
+**Elle n'exécute jamais `apply`.** Avec l'état encore local (voir « État
+distant » plus haut), des runners éphémères qui appliqueraient en parallèle
+recréeraient la clé SSH et le script post-install en double au lieu de
+converger — ces deux ressources ne bénéficient pas de la découverte
+automatique du VPS. `apply` reste une action humaine délibérée jusqu'à ce que
+l'état soit distant et verrouillé.
+
+### Secret à configurer
+
+Un seul, sur *Settings → Secrets and variables → Actions → New repository
+secret* :
+
+| Nom | Valeur |
+|---|---|
+| `HOSTINGER_API_TOKEN` | Le même token que `TF_VAR_hostinger_api_token` en local |
+
+`vps_plan`, `vps_data_center_id`, `vps_template_id` etc. **ne sont pas des
+secrets** : ils restent dans `vps.auto.tfvars`, versionnés et lisibles dans les
+diffs de PR — c'est tout l'intérêt de l'IaC. Les y déplacer les rendrait
+invisibles aux revues sans le moindre gain de sécurité, puisqu'ils sont déjà
+publics dans le dépôt.
+
+Si `dns_records` est renseigné un jour, la CI aura aussi besoin de
+`CLOUDFLARE_API_TOKEN` (mêmes permissions qu'en local) pour que le plan
+résolve la zone.
 
 ### Clés SSH
 

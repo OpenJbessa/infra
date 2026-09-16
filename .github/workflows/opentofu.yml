@@ -1,0 +1,128 @@
+name: OpenTofu
+
+# Périmètre volontaire : cette pipeline valide et prévisualise, elle
+# n'applique jamais. `tofu apply` reste une action humaine délibérée tant que
+# l'état n'est pas distant et verrouillé (voir bootstrap/ et le README) —
+# sans ça, des runners éphémères en parallèle recréeraient les ressources en
+# double au lieu de converger. Le garde-fou financier de main.tf
+# (confirm_new_vps_order) protège aussi un éventuel job d'apply futur.
+
+on:
+  pull_request:
+    paths:
+      - "**.tf"
+      - "**.tfvars"
+      - "**.tftpl"
+      - "scripts/**"
+      - ".github/workflows/opentofu.yml"
+  workflow_dispatch: {}
+  schedule:
+    # Détection de dérive : un plan hebdomadaire, en lecture seule, pour
+    # repérer un écart entre le dépôt et la réalité (ex. modification faite à
+    # la main dans le hPanel) avant qu'il ne s'accumule.
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+  pull-requests: write # uniquement pour commenter la PR avec le plan
+
+concurrency:
+  group: opentofu-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_VAR_hostinger_api_token: ${{ secrets.HOSTINGER_API_TOKEN }}
+
+jobs:
+  plan:
+    name: fmt · validate · scan · plan
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Installer OpenTofu
+        uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        with:
+          tofu_version: "1.12.6"
+
+      - name: tofu fmt -check
+        run: tofu fmt -check -recursive -diff
+
+      - name: tofu init
+        run: tofu init -input=false
+
+      - name: tofu validate
+        run: tofu validate -no-color
+
+      - name: Scan de sécurité (Trivy config)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: "config"
+          scan-ref: "."
+          exit-code: "1"
+          severity: "CRITICAL,HIGH"
+
+      - name: tofu plan
+        id: plan
+        run: |
+          set -o pipefail
+          tofu plan -input=false -no-color -lock=false | tee plan.txt
+        continue-on-error: true
+
+      - name: Commenter la PR avec le plan
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('plan.txt', 'utf8');
+            const outcome = '${{ steps.plan.outcome }}';
+            const marker = '<!-- opentofu-plan -->';
+
+            const truncated = plan.length > 60000
+              ? plan.slice(0, 60000) + '\n\n… (tronqué, voir le job pour le détail complet)'
+              : plan;
+
+            const body = [
+              marker,
+              `### Plan OpenTofu — ${outcome === 'success' ? '✅' : '❌'}`,
+              '<details><summary>Sortie complète</summary>',
+              '',
+              '```',
+              truncated,
+              '```',
+              '</details>',
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Échouer si le plan a échoué
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
