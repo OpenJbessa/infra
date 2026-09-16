@@ -36,13 +36,22 @@ trap 'echo "[post-install] ÉCHEC ligne $LINENO — voir $LOG"' ERR
 
 echo "[post-install] Démarrage : $(date --iso-8601=seconds)"
 export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
 
 # --- Système -----------------------------------------------------------------
 
-echo "[post-install] Mise à jour et paquets de base"
-apt-get update -qq
-apt-get upgrade -y -qq
-apt-get install -y -qq \
+# Hostinger tue ce script sans préavis ni trace au bout d'1h (observé :
+# `timeout -s TERM -k 3660 3600 sh -c /post_install`). Un `apt-get upgrade`
+# complet est l'étape la plus longue et la plus variable du script ; le
+# laisser tourner sans limite propre revient à s'en remettre à ce kill externe
+# — silencieux, sans ligne ÉCHEC, sans utilisateur ni pare-feu ni K3s en place.
+# Chaque appel apt est donc borné explicitement (échec loud et loggé plutôt
+# qu'un kill muet), et l'upgrade complet du système sort du chemin bloquant :
+# unattended-upgrades (configuré plus bas) s'en charge en tâche de fond.
+echo "[post-install] Paquets de base"
+timeout 300 apt-get update -qq
+timeout 300 apt-get install -y -qq \
+  -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" \
   ca-certificates curl gnupg nftables unattended-upgrades jq
 
 # kubelet refuse de démarrer avec le swap actif dans sa configuration par défaut.
@@ -218,6 +227,14 @@ APT::Periodic::Unattended-Upgrade "1";
 EOF
 systemctl enable --now unattended-upgrades
 
+# Une première passe immédiate, en arrière-plan : sans ça, les correctifs de
+# sécurité n'arriveraient qu'au prochain cycle du minuteur périodique
+# (potentiellement demain). Bornée et détachée du script : ne bloque ni ne
+# menace la suite du provisioning si elle traîne.
+systemd-run --unit=first-unattended-upgrade \
+  --description="Première passe unattended-upgrade" \
+  bash -c 'timeout 1800 unattended-upgrade -v' || true
+
 # --- K3s ---------------------------------------------------------------------
 
 echo "[post-install] Installation de K3s $K3S_VERSION"
@@ -240,7 +257,7 @@ kubelet-arg:
   - "eviction-hard=$EVICTION_HARD"
 EOF
 
-curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="$K3S_VERSION" sh -
+timeout 600 bash -c "curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION='$K3S_VERSION' sh -"
 
 echo "[post-install] Attente du nœud"
 for _ in $(seq 1 60); do
