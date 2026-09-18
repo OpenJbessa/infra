@@ -116,25 +116,15 @@ fi
 
 # --- Pare-feu ----------------------------------------------------------------
 
+# 80/443 ouverts à toutes les sources, pas seulement aux plages Cloudflare :
+# la zone DNS est en « DNS only », le trafic arrive donc en direct des
+# clients. Teleport (déployé par le dépôt GitOps) écoute aussi sur 443 en
+# multiplex ALPN et termine son propre TLS — un proxy Cloudflare devant
+# casserait cette session. C'est le seul accès au nœud une fois le port 22
+# fermé, donc une contrainte dure. La protection contre l'abus vient d'une
+# limitation de débit sur les nouvelles connexions, pas d'un filtrage par
+# source.
 echo "[post-install] nftables en refus par défaut"
-
-# Les plages Cloudflare changent : un script et un timer les rafraîchissent
-# plutôt que de les figer ici.
-cat >/usr/local/sbin/refresh-cloudflare-ips <<'EOF'
-#!/usr/bin/env bash
-# Recharge les plages Cloudflare dans les sets nftables.
-set -euo pipefail
-v4=$(curl -fsS --max-time 20 https://www.cloudflare.com/ips-v4)
-v6=$(curl -fsS --max-time 20 https://www.cloudflare.com/ips-v6)
-[ -n "$v4" ] && [ -n "$v6" ] || { echo "plages vides, abandon"; exit 1; }
-
-nft flush set inet filter cloudflare_v4
-nft flush set inet filter cloudflare_v6
-nft add element inet filter cloudflare_v4 "{ $(echo "$v4" | paste -sd,) }"
-nft add element inet filter cloudflare_v6 "{ $(echo "$v6" | paste -sd,) }"
-echo "Plages Cloudflare rechargées : $(echo "$v4" | wc -l) v4, $(echo "$v6" | wc -l) v6"
-EOF
-chmod 755 /usr/local/sbin/refresh-cloudflare-ips
 
 cat >/etc/nftables.conf <<EOF
 #!/usr/sbin/nft -f
@@ -142,16 +132,6 @@ cat >/etc/nftables.conf <<EOF
 flush ruleset
 
 table inet filter {
-  set cloudflare_v4 {
-    type ipv4_addr
-    flags interval
-  }
-
-  set cloudflare_v6 {
-    type ipv6_addr
-    flags interval
-  }
-
   chain input {
     type filter hook input priority filter; policy drop;
 
@@ -165,15 +145,15 @@ table inet filter {
     ip saddr $SERVICE_CIDR accept
 
     icmp type echo-request limit rate 5/second accept
-    icmpv6 type { echo-request, nd-neighbor-solicit, nd-neighbor-advert, nd-router-advert } accept
+    icmpv6 type { echo-request, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert } accept
 
-    # SSH : temporaire, à retirer dès que Teleport prend le relais.
-    tcp dport 22 accept
+    # Teleport n'est pas encore déployé : le port reste ouvert, borné par un
+    # taux de nouvelles connexions plutôt que fermé.
+    tcp dport 22 ct state new limit rate 10/minute burst 5 packets accept
+    tcp dport 22 ct state new drop
 
-    # HTTP(S) uniquement depuis le proxy Cloudflare : l'origine ne peut pas
-    # être jointe en direct.
-    tcp dport { 80, 443 } ip saddr @cloudflare_v4 accept
-    tcp dport { 80, 443 } ip6 saddr @cloudflare_v6 accept
+    tcp dport { 80, 443 } ct state new limit rate 100/second burst 200 packets accept
+    tcp dport { 80, 443 } ct state new drop
   }
 
   chain forward {
@@ -189,34 +169,6 @@ EOF
 
 systemctl enable nftables
 systemctl restart nftables
-/usr/local/sbin/refresh-cloudflare-ips
-
-cat >/etc/systemd/system/refresh-cloudflare-ips.service <<'EOF'
-[Unit]
-Description=Recharge les plages Cloudflare dans nftables
-After=network-online.target nftables.service
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/refresh-cloudflare-ips
-EOF
-
-cat >/etc/systemd/system/refresh-cloudflare-ips.timer <<'EOF'
-[Unit]
-Description=Rafraîchissement quotidien des plages Cloudflare
-
-[Timer]
-OnCalendar=daily
-RandomizedDelaySec=1h
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-EOF
-
-systemctl daemon-reload
-systemctl enable --now refresh-cloudflare-ips.timer
 
 # --- Mises à jour de sécurité ------------------------------------------------
 

@@ -353,9 +353,12 @@ fichier ne reconfigure pas un VPS déjà en place : l'attacher est un
 et non une destruction, donc l'abonnement n'est pas résilié. C'est le mécanisme
 de reconstruction du projet. Il efface le disque.
 
-Le pare-feu n'ouvre 80 et 443 qu'aux plages Cloudflare, rafraîchies chaque jour
-par un timer systemd plutôt que figées à l'installation. Le port 22 reste ouvert
-jusqu'à la bascule sur Teleport.
+Le pare-feu ouvre 80, 443 et 22 à toutes les sources, avec une limitation de
+débit sur les nouvelles connexions plutôt qu'un filtrage par IP source : la
+zone DNS n'est pas proxifiée par Cloudflare (le trafic arrive en direct), et
+Teleport (dépôt GitOps) termine son propre TLS sur 443 en multiplex ALPN — un
+proxy devant casserait cette session. Le port 22 reste ouvert jusqu'à la
+bascule sur Teleport.
 
 ## Points d'attention
 
