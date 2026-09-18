@@ -14,7 +14,7 @@
 
 vps_plan           = "KVM 2"
 vps_data_center_id = 19
-vps_template_id    = 1031 # Debian 12
+vps_template_id    = 1188 # Debian 13
 
 ssh_keys = {
   "laptop" = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBj14mrYL3sBYSJx1/4bEPBq+Y50UbC0J0ywdnX0WyBN"
