@@ -14,7 +14,7 @@
 
 vps_plan           = "KVM 2"
 vps_data_center_id = 19
-vps_template_id    = 1031 # Debian 13 
+vps_template_id    = 1031 # Debian 12
 
 ssh_keys = {
   "laptop" = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBj14mrYL3sBYSJx1/4bEPBq+Y50UbC0J0ywdnX0WyBN"
@@ -26,4 +26,4 @@ post_install_script_path = "scripts/post-install.sh"
 # variables.tf). Le stub le remplace, épinglé au dernier commit ayant modifié
 # post-install.sh — à mettre à jour après toute modification de ce fichier :
 #   git log -1 --format=%H -- scripts/post-install.sh
-post_install_fetch_url = "https://raw.githubusercontent.com/OpenJbessa/infra/1eddec77d9a72d129d8351d293d8606de76d97ed/scripts/post-install.sh"
+post_install_fetch_url = "https://raw.githubusercontent.com/OpenJbessa/infra/d6870dd05b6aaf9d2e9c43f450f6bfa638f2627e/scripts/post-install.sh"
