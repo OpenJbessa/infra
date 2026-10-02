@@ -147,13 +147,16 @@ table inet filter {
     icmp type echo-request limit rate 5/second accept
     icmpv6 type { echo-request, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert } accept
 
-    # Teleport n'est pas encore déployé : le port reste ouvert, borné par un
-    # taux de nouvelles connexions plutôt que fermé.
-    tcp dport 22 ct state new limit rate 10/minute burst 5 packets accept
-    tcp dport 22 ct state new drop
+    # Teleport n'est pas encore déployé : le port reste ouvert, borné par
+    # adresse source plutôt qu'au niveau global. Un seul attaquant ne peut plus
+    # épuiser le quota de l'ensemble du nœud et bloquer SSH pour tout le monde.
+    tcp dport 22 ct state new meter ssh-v4 { ip saddr timeout 1m limit rate over 10/minute burst 5 packets } drop
+    tcp dport 22 ct state new meter ssh-v6 { ip6 saddr timeout 1m limit rate over 10/minute burst 5 packets } drop
+    tcp dport 22 ct state new accept
 
-    tcp dport { 80, 443 } ct state new limit rate 100/second burst 200 packets accept
-    tcp dport { 80, 443 } ct state new drop
+    tcp dport { 80, 443 } ct state new meter http-v4 { ip saddr timeout 1m limit rate over 100/second burst 200 packets } drop
+    tcp dport { 80, 443 } ct state new meter http-v6 { ip6 saddr timeout 1m limit rate over 100/second burst 200 packets } drop
+    tcp dport { 80, 443 } ct state new accept
   }
 
   chain forward {
