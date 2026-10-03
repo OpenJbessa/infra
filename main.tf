@@ -56,7 +56,7 @@ resource "hostinger_vps" "this" {
     ignore_changes = [ssh_key_ids]
 
     precondition {
-      condition     = var.vps_root_password == null || length(var.vps_root_password) >= 12
+      condition = var.vps_root_password == null ? true : length(var.vps_root_password) >= 12
       error_message = "vps_root_password doit faire au moins 12 caractères."
     }
 
